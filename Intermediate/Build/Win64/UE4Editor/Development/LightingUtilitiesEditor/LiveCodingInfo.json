@@ -1,0 +1,15 @@
+{
+	"RemapUnityFiles": 
+	{
+		"Module.LightingUtilitiesEditor.cpp.obj": [
+			"LightingUtilitiesEditorModule.cpp.obj",
+			"LightingUtilitiesEditorSubsystem.cpp.obj",
+			"SLightingUtilitiesPreviewPanel.cpp.obj"
+		],
+		"Module.LightingUtilitiesEditor.gen.cpp.obj": [
+			"LightingUtilitiesEditor.init.gen.cpp.obj",
+			"LightingUtilitiesEditorSubsystem.gen.cpp.obj",
+			"LightingUtilitiesTypes.gen.cpp.obj"
+		]
+	}
+}

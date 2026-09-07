@@ -1,0 +1,18 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0",
+  "FriendlyName": "Lighting Utilities Preview",
+  "Description": "In-editor, visual-only lighting mode previewer for LightingMaterialManager mesh lists exported via UAssetAPI/FModel. Swaps materials on live level actors for preview without ever saving the change to the map.",
+  "Category": "Other",
+  "CreatedBy": "MJ",
+  "CanContainContent": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "LightingUtilitiesEditor",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ]
+}
