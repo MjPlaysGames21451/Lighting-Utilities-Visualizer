@@ -21,7 +21,7 @@ void EmptyLinkFunctionForGeneratedCodeLightingUtilitiesEditor_init() {}
 				nullptr,
 				0,
 				PKG_CompiledIn | 0x00000040,
-				0x7C6A7C51,
+				0x9E96F125,
 				0x08A22372,
 				METADATA_PARAMS(nullptr, 0)
 			};

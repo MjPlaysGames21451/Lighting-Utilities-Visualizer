@@ -10,6 +10,8 @@
 #include "Engine/LevelStreaming.h"
 #include "Engine/StaticMeshActor.h"
 #include "EngineUtils.h"
+#include "PackageTools.h"
+#include "JsonObjectConverter.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -19,13 +21,13 @@ void ULightingUtilitiesEditorSubsystem::Initialize(FSubsystemCollectionBase& Col
 {
     Super::Initialize(Collection);
 
-    UE_LOG(LogLightingUtils, Display, TEXT("[LightingUtilities] Subsystem Initialized. (Preview inactive until Applied)"));
+    UE_LOG(LogLightingUtils, Display, TEXT("[LightingUtilities] Subsystem Initialized. (Package load deferred until Editor World is ready)"));
 
     FEditorDelegates::OnMapOpened.AddUObject(this, &ULightingUtilitiesEditorSubsystem::OnMapOpened);
     FEditorDelegates::PreSaveWorld.AddUObject(this, &ULightingUtilitiesEditorSubsystem::OnPreSaveWorld);
     FEditorDelegates::PostSaveWorld.AddUObject(this, &ULightingUtilitiesEditorSubsystem::OnPostSaveWorld);
 
-    ReloadData();
+    // DO NOT load .umap packages here! GEngine is not fully initialized during subsystem registration.
 }
 
 void ULightingUtilitiesEditorSubsystem::Deinitialize()
@@ -93,7 +95,7 @@ void ULightingUtilitiesEditorSubsystem::SetSelectedUtilityMap(const FString& InM
         return;
     }
 
-    UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Active Utility Map changed to: '%s'"), *InMapPackage);
+    UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Active Utility Map switched to: '%s'"), *InMapPackage);
     TargetUtilityPackage = InMapPackage;
 
     LastUmapTimestamp = FDateTime::MinValue();
@@ -120,7 +122,7 @@ TArray<FString> ULightingUtilitiesEditorSubsystem::GetAllActiveMapAndSublevelNam
     LevelNames.Add(PersistentPackage);
     LevelNames.Add(FPackageName::GetShortName(PersistentPackage));
 
-    // 2. Loaded Sublevels
+    // 2. Sublevels in memory
     for (ULevel* Level : World->GetLevels())
     {
         if (Level && Level->GetOutermost())
@@ -131,7 +133,7 @@ TArray<FString> ULightingUtilitiesEditorSubsystem::GetAllActiveMapAndSublevelNam
         }
     }
 
-    // 3. Streaming Level definitions
+    // 3. Streaming levels
     for (ULevelStreaming* StreamingLevel : World->GetStreamingLevels())
     {
         if (StreamingLevel)
@@ -153,6 +155,12 @@ void ULightingUtilitiesEditorSubsystem::OnMapOpened(const FString& Filename, boo
     UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Map Opened: %s"), *Filename);
     LastAppliedSignature.Empty();
 
+    // Load data now that engine and world are fully initialized
+    if (CachedEntries.Num() == 0)
+    {
+        ReloadData();
+    }
+
     if (bIsPreviewActive)
     {
         RefreshLighting(true);
@@ -168,20 +176,34 @@ void ULightingUtilitiesEditorSubsystem::Tick(float DeltaTime)
     }
     TimeSinceLastCheck = 0.0f;
 
+    UWorld* World = GetSafeEditorWorld();
+    if (!World)
+    {
+        return; // Wait until Editor World is up
+    }
+
+    // First safe opportunity to load the map package
+    if (CachedEntries.Num() == 0)
+    {
+        ReloadData();
+    }
+
     const bool bFilesChanged = CheckForFileUpdates();
     if (bFilesChanged)
     {
-        UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Disk file change detected! Reloading..."));
+        UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Target map asset updated on disk! Reloading live package..."));
+
+        UPackage* ExistingPackage = FindPackage(nullptr, *TargetUtilityPackage);
+        if (ExistingPackage)
+        {
+            TArray<UPackage*> PackagesToReload = { ExistingPackage };
+            UPackageTools::ReloadPackages(PackagesToReload);
+        }
+
         ReloadData();
     }
 
     if (!bIsPreviewActive)
-    {
-        return;
-    }
-
-    UWorld* World = GetSafeEditorWorld();
-    if (!World)
     {
         return;
     }
@@ -222,33 +244,137 @@ bool ULightingUtilitiesEditorSubsystem::CheckForFileUpdates()
         LastUexpTimestamp = UexpTime;
     }
 
-    FString ShortMapName = FPackageName::GetShortName(TargetUtilityPackage);
-    TArray<FString> JsonCandidates;
-    JsonCandidates.Add(FPaths::ProjectPluginsDir() / FString::Printf(TEXT("LightingUtilitiesEditor/Content/LightingUtilities/%s.json"), *ShortMapName));
-    JsonCandidates.Add(FPaths::ProjectPluginsDir() / TEXT("LightingUtilitiesEditor/Content/LightingUtilities/MAP_LightingUtilities.json"));
-
-    for (const FString& JsonPath : JsonCandidates)
-    {
-        if (FileManager.FileExists(*JsonPath))
-        {
-            FDateTime JsonTime = FileManager.GetTimeStamp(*JsonPath);
-            if (LastJsonTimestamp != FDateTime::MinValue() && JsonTime > LastJsonTimestamp)
-            {
-                bUpdated = true;
-            }
-            LastJsonTimestamp = JsonTime;
-            break;
-        }
-    }
-
     return bUpdated;
 }
 
 void ULightingUtilitiesEditorSubsystem::ReloadData()
 {
-    CachedJsonEntries.Empty();
-    IFileManager& FileManager = IFileManager::Get();
+    UWorld* World = GetSafeEditorWorld();
+    if (!World)
+    {
+        return; // Guard against running before engine is fully initialized
+    }
 
+    CachedEntries.Empty();
+
+    // 1. Try loading directly from the actual .umap asset package
+    bool bLoadedFromUmap = LoadDataFromMapPackage();
+
+    // 2. Fallback to JSON only if the .umap could not be read
+    if (!bLoadedFromUmap || CachedEntries.Num() == 0)
+    {
+        UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Could not read actors directly from '%s', attempting JSON fallback..."), *TargetUtilityPackage);
+        LoadDataFromFallbackJson();
+    }
+
+    if (bIsPreviewActive)
+    {
+        RefreshLighting(true);
+    }
+}
+
+bool ULightingUtilitiesEditorSubsystem::LoadDataFromMapPackage()
+{
+    UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Loading actual map asset: '%s'..."), *TargetUtilityPackage);
+
+    UPackage* MapPackage = FindPackage(nullptr, *TargetUtilityPackage);
+    if (!MapPackage)
+    {
+        MapPackage = LoadPackage(nullptr, *TargetUtilityPackage, LOAD_None);
+    }
+
+    if (!MapPackage)
+    {
+        UE_LOG(LogLightingUtils, Error, TEXT("[LightingUtilities] Failed to load package '%s'"), *TargetUtilityPackage);
+        return false;
+    }
+
+    int32 FoundManagers = 0;
+
+    // Direct extraction via UWorld::FindWorldInPackage
+    UWorld* LoadedWorld = UWorld::FindWorldInPackage(MapPackage);
+    if (LoadedWorld && LoadedWorld->PersistentLevel)
+    {
+        for (AActor* Actor : LoadedWorld->PersistentLevel->Actors)
+        {
+            if (!Actor)
+            {
+                continue;
+            }
+
+            UClass* ActorClass = Actor->GetClass();
+            FProperty* MeshMaterialsProp = ActorClass->FindPropertyByName(TEXT("MeshMaterials"));
+            if (!MeshMaterialsProp)
+            {
+                continue;
+            }
+
+            TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
+            ActorJson->SetStringField(TEXT("Type"), TEXT("LightingMaterialManager"));
+            ActorJson->SetStringField(TEXT("Name"), Actor->GetName());
+            ActorJson->SetStringField(TEXT("Class"), ActorClass->GetName());
+
+            TSharedPtr<FJsonObject> PropertiesJson = MakeShareable(new FJsonObject);
+            if (FJsonObjectConverter::UStructToJsonObject(ActorClass, Actor, PropertiesJson.ToSharedRef(), 0, 0))
+            {
+                ActorJson->SetObjectField(TEXT("Properties"), PropertiesJson);
+                CachedEntries.Add(MakeShareable(new FJsonValueObject(ActorJson)));
+                FoundManagers++;
+
+                UE_LOG(LogLightingUtils, Log, TEXT("   Found Manager Actor: '%s' (%s)"), *Actor->GetName(), *ActorClass->GetName());
+            }
+        }
+    }
+
+    // Secondary fallback: scan objects inside package if world was not resolved
+    if (FoundManagers == 0)
+    {
+        TArray<UObject*> PackageObjects;
+        GetObjectsWithOuter(MapPackage, PackageObjects, true);
+
+        for (UObject* Obj : PackageObjects)
+        {
+            AActor* Actor = Cast<AActor>(Obj);
+            if (!Actor)
+            {
+                continue;
+            }
+
+            UClass* ActorClass = Actor->GetClass();
+            FProperty* MeshMaterialsProp = ActorClass->FindPropertyByName(TEXT("MeshMaterials"));
+            if (!MeshMaterialsProp)
+            {
+                continue;
+            }
+
+            TSharedPtr<FJsonObject> ActorJson = MakeShareable(new FJsonObject);
+            ActorJson->SetStringField(TEXT("Type"), TEXT("LightingMaterialManager"));
+            ActorJson->SetStringField(TEXT("Name"), Actor->GetName());
+            ActorJson->SetStringField(TEXT("Class"), ActorClass->GetName());
+
+            TSharedPtr<FJsonObject> PropertiesJson = MakeShareable(new FJsonObject);
+            if (FJsonObjectConverter::UStructToJsonObject(ActorClass, Actor, PropertiesJson.ToSharedRef(), 0, 0))
+            {
+                ActorJson->SetObjectField(TEXT("Properties"), PropertiesJson);
+                CachedEntries.Add(MakeShareable(new FJsonValueObject(ActorJson)));
+                FoundManagers++;
+            }
+        }
+    }
+
+    if (FoundManagers > 0)
+    {
+        UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] SUCCESS: Read %d LightingMaterialManager actors DIRECTLY from '%s' (.umap/.uexp)!"),
+            FoundManagers, *TargetUtilityPackage);
+        return true;
+    }
+
+    return false;
+}
+
+void ULightingUtilitiesEditorSubsystem::LoadDataFromFallbackJson()
+{
+    IFileManager& FileManager = IFileManager::Get();
     FString ShortMapName = FPackageName::GetShortName(TargetUtilityPackage);
 
     TArray<FString> PotentialJsonPaths;
@@ -273,17 +399,10 @@ void ULightingUtilitiesEditorSubsystem::ReloadData()
         if (FFileHelper::LoadFileToString(JsonContent, *FoundJsonPath))
         {
             TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonContent);
-            if (FJsonSerializer::Deserialize(Reader, CachedJsonEntries))
-            {
-                UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Loaded %d JSON entries from '%s'."),
-                    CachedJsonEntries.Num(), *FoundJsonPath);
-            }
+            FJsonSerializer::Deserialize(Reader, CachedEntries);
+            UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Fallback: Loaded %d entries from JSON file '%s'."),
+                CachedEntries.Num(), *FoundJsonPath);
         }
-    }
-
-    if (bIsPreviewActive)
-    {
-        RefreshLighting(true);
     }
 }
 
@@ -291,6 +410,10 @@ void ULightingUtilitiesEditorSubsystem::ApplyLighting()
 {
     UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] ApplyLighting triggered! Activating preview."));
     bIsPreviewActive = true;
+    if (CachedEntries.Num() == 0)
+    {
+        ReloadData();
+    }
     RefreshLighting(true);
 }
 
@@ -366,10 +489,11 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
     }
 
     TArray<FString> ActiveLevels = GetAllActiveMapAndSublevelNames(World);
-    UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Applying materials for %d active levels (Mode: %d)..."),
-        ActiveLevels.Num(), (int32)CurrentLightingMode);
+    FString ActiveLevelsStr = FString::Join(ActiveLevels, TEXT(", "));
+    UE_LOG(LogLightingUtils, Warning, TEXT("[LightingUtilities] Applying materials for %d active levels: [ %s ] (Mode: %d)..."),
+        ActiveLevels.Num(), *ActiveLevelsStr, (int32)CurrentLightingMode);
 
-    // Map actors by both FullPath:ActorName and ShortMapName:ActorName (case-insensitive)
+    // Build map of actors in current world keyed by "mappackage:actorname" and "shortmapname:actorname"
     TMap<FString, AActor*> ActorsByMapAndName;
     for (TActorIterator<AActor> It(World); It; ++It)
     {
@@ -395,7 +519,7 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
 
     int32 OverriddenCount = 0;
 
-    for (const TSharedPtr<FJsonValue>& EntryVal : CachedJsonEntries)
+    for (const TSharedPtr<FJsonValue>& EntryVal : CachedEntries)
     {
         if (EntryVal->Type != EJson::Object)
         {
@@ -403,12 +527,6 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
         }
 
         TSharedPtr<FJsonObject> EntryObj = EntryVal->AsObject();
-        FString Type = EntryObj->GetStringField(TEXT("Type"));
-        if (!Type.Contains(TEXT("LightingMaterialManager")))
-        {
-            continue;
-        }
-
         if (!EntryObj->HasField(TEXT("Properties")))
         {
             continue;
@@ -430,6 +548,7 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
 
             TSharedPtr<FJsonObject> MeshMatObj = MeshMatVal->AsObject();
 
+            // Select material array based on lighting mode
             FString MaterialFieldKey;
             switch (CurrentLightingMode)
             {
@@ -461,13 +580,26 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
                 continue;
             }
 
+            // Resolve target materials (supports both String and Object entries)
             TArray<UMaterialInterface*> TargetMaterials;
             for (const TSharedPtr<FJsonValue>& MatRefVal : *TargetMaterialsArray)
             {
-                if (MatRefVal->Type == EJson::Object)
+                FString ObjectPath;
+                if (MatRefVal->Type == EJson::String)
                 {
-                    FString ObjectPath;
-                    MatRefVal->AsObject()->TryGetStringField(TEXT("ObjectPath"), ObjectPath);
+                    ObjectPath = MatRefVal->AsString();
+                }
+                else if (MatRefVal->Type == EJson::Object)
+                {
+                    TSharedPtr<FJsonObject> MatObj = MatRefVal->AsObject();
+                    if (!MatObj->TryGetStringField(TEXT("ObjectPath"), ObjectPath))
+                    {
+                        MatObj->TryGetStringField(TEXT("AssetPathName"), ObjectPath);
+                    }
+                }
+
+                if (!ObjectPath.IsEmpty())
+                {
                     if (UMaterialInterface* Mat = ResolveMaterialFromObjectPath(ObjectPath))
                     {
                         TargetMaterials.Add(Mat);
@@ -480,6 +612,7 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
                 continue;
             }
 
+            // Resolve static mesh actors (supports both String and Object entries)
             const TArray<TSharedPtr<FJsonValue>>* StaticMeshActorArray = nullptr;
             if (!MeshMatObj->TryGetArrayField(TEXT("StaticMeshActor"), StaticMeshActorArray) || !StaticMeshActorArray)
             {
@@ -488,17 +621,36 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
 
             for (const TSharedPtr<FJsonValue>& ActorRefVal : *StaticMeshActorArray)
             {
-                if (ActorRefVal->Type != EJson::Object)
+                FString TargetPackagePath;
+                FString ActorSubPath;
+
+                if (ActorRefVal->Type == EJson::String)
                 {
-                    continue;
+                    // Live map serialization formats FSoftObjectPath as a string
+                    FSoftObjectPath SoftPath(ActorRefVal->AsString());
+                    TargetPackagePath = SoftPath.GetAssetPathString();
+                    ActorSubPath = SoftPath.GetSubPathString();
+
+                    // Fallback parsing if SubPathString was not populated
+                    if (ActorSubPath.IsEmpty())
+                    {
+                        FString FullStr = ActorRefVal->AsString();
+                        int32 ColonIdx = INDEX_NONE;
+                        if (FullStr.FindChar(':', ColonIdx))
+                        {
+                            TargetPackagePath = FullStr.Left(ColonIdx);
+                            ActorSubPath = FullStr.Mid(ColonIdx + 1);
+                        }
+                    }
+                }
+                else if (ActorRefVal->Type == EJson::Object)
+                {
+                    TSharedPtr<FJsonObject> ActorRefObj = ActorRefVal->AsObject();
+                    ActorRefObj->TryGetStringField(TEXT("AssetPathName"), TargetPackagePath);
+                    ActorRefObj->TryGetStringField(TEXT("SubPathString"), ActorSubPath);
                 }
 
-                TSharedPtr<FJsonObject> ActorRefObj = ActorRefVal->AsObject();
-                FString AssetPathName, SubPathString;
-                ActorRefObj->TryGetStringField(TEXT("AssetPathName"), AssetPathName);
-                ActorRefObj->TryGetStringField(TEXT("SubPathString"), SubPathString);
-
-                FString TargetPackagePath = AssetPathName;
+                // Clean package name (strip dot asset names)
                 int32 DotIndex = INDEX_NONE;
                 if (TargetPackagePath.FindChar('.', DotIndex))
                 {
@@ -506,10 +658,16 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
                 }
                 FString TargetMapShortName = FPackageName::GetShortName(TargetPackagePath);
 
-                FString ActorName = SubPathString;
+                // Clean actor name (e.g. "PersistentLevel.MOD_Techlight78_160" -> "MOD_Techlight78_160")
+                FString ActorName = ActorSubPath;
                 if (ActorName.FindLastChar('.', DotIndex))
                 {
                     ActorName = ActorName.Mid(DotIndex + 1);
+                }
+
+                if (ActorName.IsEmpty())
+                {
+                    continue;
                 }
 
                 FString QueryFullKey = (TargetPackagePath + TEXT(":") + ActorName).ToLower();
@@ -525,6 +683,7 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
                     FoundActor = *PtrShort;
                 }
 
+                // If not found in the currently loaded level/sublevels, skip
                 if (!FoundActor)
                 {
                     continue;
@@ -536,6 +695,7 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
                     continue;
                 }
 
+                // Cache original materials before overriding
                 if (!OriginalComponentMaterials.Contains(MeshComp))
                 {
                     FCachedMaterialState OriginalState;
@@ -546,6 +706,7 @@ void ULightingUtilitiesEditorSubsystem::ApplyMeshMaterialsForActiveLevels()
                     OriginalComponentMaterials.Add(MeshComp, OriginalState);
                 }
 
+                // Apply target materials
                 for (int32 Slot = 0; Slot < TargetMaterials.Num(); ++Slot)
                 {
                     if (TargetMaterials[Slot])

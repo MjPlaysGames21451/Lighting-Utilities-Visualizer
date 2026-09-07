@@ -344,9 +344,9 @@ static struct FScriptStruct_LightingUtilitiesEditor_StaticRegisterNativesFCached
 #if WITH_METADATA
 	const UE4CodeGen_Private::FMetaDataPairParam Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetSelectedUtilityMap_Statics::Function_MetaDataParams[] = {
 		{ "Category", "Lighting Utilities" },
-		{ "Comment", "/** Returns the currently selected utility map package */" },
+		{ "Comment", "/** Returns currently selected utility map package */" },
 		{ "ModuleRelativePath", "Public/LightingUtilitiesEditorSubsystem.h" },
-		{ "ToolTip", "Returns the currently selected utility map package" },
+		{ "ToolTip", "Returns currently selected utility map package" },
 	};
 #endif
 	const UE4CodeGen_Private::FFunctionParams Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetSelectedUtilityMap_Statics::FuncParams = { (UObject*(*)())Z_Construct_UClass_ULightingUtilitiesEditorSubsystem, nullptr, "GetSelectedUtilityMap", nullptr, nullptr, sizeof(LightingUtilitiesEditorSubsystem_eventGetSelectedUtilityMap_Parms), Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetSelectedUtilityMap_Statics::PropPointers, UE_ARRAY_COUNT(Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetSelectedUtilityMap_Statics::PropPointers), RF_Public|RF_Transient|RF_MarkAsNative, (EFunctionFlags)0x54020401, 0, 0, METADATA_PARAMS(Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetSelectedUtilityMap_Statics::Function_MetaDataParams, UE_ARRAY_COUNT(Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetSelectedUtilityMap_Statics::Function_MetaDataParams)) };
@@ -546,9 +546,9 @@ static struct FScriptStruct_LightingUtilitiesEditor_StaticRegisterNativesFCached
 #if WITH_METADATA
 	const UE4CodeGen_Private::FMetaDataPairParam Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_SetSelectedUtilityMap_Statics::Function_MetaDataParams[] = {
 		{ "Category", "Lighting Utilities" },
-		{ "Comment", "/** Sets the active utility map and reloads data */" },
+		{ "Comment", "/** Sets the active utility map and reloads directly from that .umap */" },
 		{ "ModuleRelativePath", "Public/LightingUtilitiesEditorSubsystem.h" },
-		{ "ToolTip", "Sets the active utility map and reloads data" },
+		{ "ToolTip", "Sets the active utility map and reloads directly from that .umap" },
 	};
 #endif
 	const UE4CodeGen_Private::FFunctionParams Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_SetSelectedUtilityMap_Statics::FuncParams = { (UObject*(*)())Z_Construct_UClass_ULightingUtilitiesEditorSubsystem, nullptr, "SetSelectedUtilityMap", nullptr, nullptr, sizeof(LightingUtilitiesEditorSubsystem_eventSetSelectedUtilityMap_Parms), Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_SetSelectedUtilityMap_Statics::PropPointers, UE_ARRAY_COUNT(Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_SetSelectedUtilityMap_Statics::PropPointers), RF_Public|RF_Transient|RF_MarkAsNative, (EFunctionFlags)0x04020401, 0, 0, METADATA_PARAMS(Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_SetSelectedUtilityMap_Statics::Function_MetaDataParams, UE_ARRAY_COUNT(Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_SetSelectedUtilityMap_Statics::Function_MetaDataParams)) };
@@ -597,13 +597,13 @@ static struct FScriptStruct_LightingUtilitiesEditor_StaticRegisterNativesFCached
 		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_ClearPreview, "ClearPreview" }, // 2478619211
 		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetAvailableUtilityMaps, "GetAvailableUtilityMaps" }, // 3636440683
 		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetLoadedEntryCount, "GetLoadedEntryCount" }, // 1008962807
-		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetSelectedUtilityMap, "GetSelectedUtilityMap" }, // 17092273
+		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_GetSelectedUtilityMap, "GetSelectedUtilityMap" }, // 3786086784
 		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_HasPendingOverrides, "HasPendingOverrides" }, // 2822546906
 		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_RefreshLighting, "RefreshLighting" }, // 3053040086
 		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_ReloadData, "ReloadData" }, // 194232948
 		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_RevertToOriginalMaterials, "RevertToOriginalMaterials" }, // 4083288200
 		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_SetCurrentLightingMode, "SetCurrentLightingMode" }, // 2697043878
-		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_SetSelectedUtilityMap, "SetSelectedUtilityMap" }, // 1256473768
+		{ &Z_Construct_UFunction_ULightingUtilitiesEditorSubsystem_SetSelectedUtilityMap, "SetSelectedUtilityMap" }, // 1361677563
 	};
 #if WITH_METADATA
 	const UE4CodeGen_Private::FMetaDataPairParam Z_Construct_UClass_ULightingUtilitiesEditorSubsystem_Statics::Class_MetaDataParams[] = {
@@ -662,7 +662,7 @@ static struct FScriptStruct_LightingUtilitiesEditor_StaticRegisterNativesFCached
 		}
 		return OuterClass;
 	}
-	IMPLEMENT_CLASS(ULightingUtilitiesEditorSubsystem, 1102270632);
+	IMPLEMENT_CLASS(ULightingUtilitiesEditorSubsystem, 3200464828);
 	template<> LIGHTINGUTILITIESEDITOR_API UClass* StaticClass<ULightingUtilitiesEditorSubsystem>()
 	{
 		return ULightingUtilitiesEditorSubsystem::StaticClass();

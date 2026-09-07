@@ -43,9 +43,14 @@ F:\UnrealEngine-CAS\Engine\Intermediate\Build\Win64\UE4Editor\Inc\Engine\ReverbS
 F:\UnrealEngine-CAS\Engine\Intermediate\Build\Win64\UE4Editor\Inc\Engine\AudioVolume.generated.h
 F:\UnrealEngine-CAS\Engine\Source\Runtime\CoreUObject\Public\UObject/ConstructorHelpers.h
 F:\UnrealEngine-CAS\Engine\Intermediate\Build\Win64\UE4Editor\Inc\Engine\WorldSettings.generated.h
+F:\UnrealEngine-CAS\Engine\Source\Editor\UnrealEd\Public\PackageTools.h
+F:\UnrealEngine-CAS\Engine\Intermediate\Build\Win64\UE4Editor\Inc\UnrealEd\PackageTools.generated.h
+F:\UnrealEngine-CAS\Engine\Source\Runtime\JsonUtilities\Public\JsonObjectConverter.h
 F:\UnrealEngine-CAS\Engine\Source\Runtime\Json\Public\Serialization/JsonReader.h
 F:\UnrealEngine-CAS\Engine\Source\Runtime\Json\Public\Serialization/JsonSerializer.h
 F:\UnrealEngine-CAS\Engine\Source\Runtime\Json\Public\Serialization/JsonWriter.h
+F:\UnrealEngine-CAS\Engine\Source\Runtime\JsonUtilities\Public\JsonObjectWrapper.h
+F:\UnrealEngine-CAS\Engine\Intermediate\Build\Win64\UE4Editor\Inc\JsonUtilities\JsonObjectWrapper.generated.h
 F:/SBRUIN-Blank-4.27/Plugins/LightingUtilitiesEditor/Source/LightingUtilitiesEditor/Private/SLightingUtilitiesPreviewPanel.cpp
 F:\UnrealEngine-CAS\Engine\Source\Runtime\Slate\Public\Widgets/Layout/SUniformGridPanel.h
 F:\UnrealEngine-CAS\Engine\Source\Runtime\Slate\Public\SlateOptMacros.h

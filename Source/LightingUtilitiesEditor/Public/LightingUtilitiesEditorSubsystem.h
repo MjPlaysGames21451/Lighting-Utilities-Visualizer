@@ -38,11 +38,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Lighting Utilities")
     TArray<FString> GetAvailableUtilityMaps();
 
-    /** Returns the currently selected utility map package */
+    /** Returns currently selected utility map package */
     UFUNCTION(BlueprintCallable, Category = "Lighting Utilities")
     FString GetSelectedUtilityMap() const { return TargetUtilityPackage; }
 
-    /** Sets the active utility map and reloads data */
+    /** Sets the active utility map and reloads directly from that .umap */
     UFUNCTION(BlueprintCallable, Category = "Lighting Utilities")
     void SetSelectedUtilityMap(const FString& InMapPackage);
 
@@ -72,7 +72,7 @@ public:
     void ReloadData();
 
     UFUNCTION(BlueprintCallable, Category = "Lighting Utilities")
-    int32 GetLoadedEntryCount() const { return CachedJsonEntries.Num(); }
+    int32 GetLoadedEntryCount() const { return CachedEntries.Num(); }
 
     UFUNCTION(BlueprintCallable, Category = "Lighting Utilities")
     bool HasPendingOverrides() const { return bIsPreviewActive && OriginalComponentMaterials.Num() > 0; }
@@ -87,20 +87,19 @@ private:
     /** Default map path */
     FString TargetUtilityPackage = TEXT("/Game/Maps/World/MAP_LightingUtilities");
 
-    /** Only applies materials if user has clicked Apply or chosen a mode */
     bool bIsPreviewActive = false;
 
     ELightingUtilityMode CurrentLightingMode = static_cast<ELightingUtilityMode>(0);
 
     FDateTime LastUmapTimestamp = FDateTime::MinValue();
     FDateTime LastUexpTimestamp = FDateTime::MinValue();
-    FDateTime LastJsonTimestamp = FDateTime::MinValue();
 
     FString LastAppliedSignature;
     float TimeSinceLastCheck = 0.0f;
     const float CheckInterval = 0.5f;
 
-    TArray<TSharedPtr<FJsonValue>> CachedJsonEntries;
+    /** In-memory data parsed directly from the live .umap actors */
+    TArray<TSharedPtr<FJsonValue>> CachedEntries;
 
     UPROPERTY(Transient)
     TMap<TWeakObjectPtr<UStaticMeshComponent>, FCachedMaterialState> OriginalComponentMaterials;
@@ -116,6 +115,9 @@ private:
     void OnPostSaveWorld(uint32 SaveFlags, UWorld* World, bool bSuccess);
 
     bool CheckForFileUpdates();
+    bool LoadDataFromMapPackage();
+    void LoadDataFromFallbackJson();
+
     void ApplyMeshMaterialsForActiveLevels();
     void RevertAllMeshMaterials();
 
